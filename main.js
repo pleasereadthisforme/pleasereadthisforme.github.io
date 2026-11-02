@@ -219,7 +219,8 @@ $('#motion-toggle').addEventListener('click',()=>{paused=!paused;$('#motion-togg
 // Approved poses replace the ambiguous newly drawn walking/pointing figures.
 // Static first frame only, without duplicated SVG clip identifiers.
 $('#hero-user').innerHTML='<svg viewBox="110 75 555 395" aria-hidden="true"><image href="assets/character-user-typing-sheet-v7.png" width="1536" height="1024"/></svg>';
-installBot('reading');drawBot(110);const reader=bot.firstElementChild.cloneNode(true);reader.querySelectorAll('[id]').forEach(e=>e.removeAttribute('id'));$('#source-reader').append(reader);
+installBot('reading');drawBot(110);const reader=bot.firstElementChild.cloneNode(true);reader.querySelectorAll('[id]').forEach(e=>{e.id='source-'+e.id;});
+reader.querySelectorAll('*').forEach(e=>{for(const a of [...e.attributes]){let value=a.value.replaceAll('url(#','url(#source-');if((a.name==='href'||a.name==='xlink:href')&&value.startsWith('#'))value='#source-'+value.slice(1);if(value!==a.value)e.setAttribute(a.name,value);}});$('#source-reader').append(reader);
 render(0,true);layoutDemo();layoutEvidence();schedule();
 
 
