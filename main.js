@@ -81,11 +81,37 @@ trace.forEach(([kind,caption,,output],i)=>{
  for(const [cls,text] of [['step-arrow','›'],['step-number',String(i+1).padStart(2,'0')],['step-kind',kind],['step-caption',caption],['log-mark',''],['log-duration','—']]){const el=document.createElement('span');el.className=cls;el.textContent=text;button.append(el);}
  const detail=document.createElement('pre');detail.className='log-detail';detail.hidden=true;detail.textContent='Command output\n\n'+output;row.append(button,detail);logs.append(row);
 });
+const traceViewport = $('.stage .terminal-content');
+let followTrace = true;
+// Cancel any in-flight follow animation when inspecting previous logs.
+function stopTraceFollow(){
+ followTrace=false;
+ traceViewport.scrollTo({top:traceViewport.scrollTop,behavior:'instant'});
+}
+traceViewport.addEventListener('wheel',stopTraceFollow,{passive:true});
+traceViewport.addEventListener('touchmove',stopTraceFollow,{passive:true});
+traceViewport.addEventListener('pointerdown',stopTraceFollow,{passive:true});
+traceViewport.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key))stopTraceFollow();});
 let currentEvent=-2,currentPose='';
+function followActiveTrace(){
+ if(!followTrace)return;
+ if(currentEvent<0){traceViewport.scrollTo({top:0,behavior:'instant'});return;}
+ const row=logs.children[currentEvent];
+ if(!row||row.hidden)return;
+ const viewport=traceViewport.getBoundingClientRect(),line=row.querySelector('.log-toggle').getBoundingClientRect();
+ if(line.top<viewport.top||line.bottom>viewport.bottom){
+  traceViewport.scrollTo({
+   top:traceViewport.scrollTop+line.top-viewport.top,
+   behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'
+  });
+ }
+}
+
 function renderTrace(progress){
  const event=progress<.25?-1:progress<.70?Math.min(5,Math.floor((progress-.25)/.45*6)):progress<.875?6:7;
  if(event!==currentEvent){
   currentEvent=event;
+  if(event<0)followTrace=true;
   document.querySelectorAll('[data-log]').forEach((row,i)=>{
    const done=i<event||event===7,active=i===event&&!done;
    row.hidden=i>event;row.classList.toggle('complete',done);row.classList.toggle('active',active);
@@ -95,6 +121,7 @@ function renderTrace(progress){
    const open=(i===event&&(i===1||i===3||i===5))||(i===5&&event>=6);
    row.querySelector('.log-detail').hidden=!open;row.querySelector('button').setAttribute('aria-expanded',String(open));
   });
+  requestAnimationFrame(followActiveTrace);
   const pose=event<0?'idle':trace[event][2];
   if(pose!==currentPose){currentPose=pose;installBot(pose);}
  }
@@ -170,7 +197,7 @@ new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;syncMotion();}
 
 function update(){pending=0;if(paused||document.hidden||manual)return;lastProgress=progressFromScroll();render(lastProgress);renderEvidenceScroll();}
 function schedule(){if(!pending&&!document.hidden)pending=requestAnimationFrame(update);}
-window.addEventListener('scroll',()=>{manual=false;schedule();},{passive:true});window.addEventListener('resize',()=>{layoutDemo();layoutEvidence();schedule();});
+window.addEventListener('scroll',()=>{manual=false;schedule();},{passive:true});window.addEventListener('resize',()=>{layoutDemo();layoutEvidence();requestAnimationFrame(followActiveTrace);schedule();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(pending);pending=0;}else schedule();syncMotion();});
 reduced.addEventListener('change',()=>{render(lastProgress,true);syncMotion();});
 document.querySelectorAll('button[data-step]').forEach(b=>b.addEventListener('click',()=>{manual=true;lastProgress=[.12,.60,.78,.94][Number(b.dataset.step)];const top=scrollY+track.getBoundingClientRect().top-centerOffset+Math.max(0,track.offsetHeight-sticky.offsetHeight)*lastProgress;window.scrollTo({top,behavior:'instant'});render(lastProgress,true);}));
