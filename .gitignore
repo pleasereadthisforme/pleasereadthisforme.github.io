@@ -1,0 +1,33 @@
+# Publish only the site and its explicitly selected assets.
+/*
+!/.gitignore
+!/README.md
+!/.nojekyll
+!/index.html
+!/styles.css
+!/main.js
+!/search-story.js
+!/mascot-templates.js
+!/assets/
+/assets/*
+!/assets/character-bot-question-v4.png
+!/assets/character-bot-typing-approved-v1.png
+!/assets/character-user-typing-sheet-v7.png
+!/assets/character-bot-papers-v5.png
+!/assets/character-bot-idle-v8.png
+.env
+.env.*
+*.key
+*.pem
+
+
+# Public policy pages referenced by the footer.
+!/privacy.html
+!/terms.html
+!/policy.css
+!/licensing.html
+
+# Approved website licensing documents.
+!/LICENSE
+!/LICENSING.md
+!/BRAND_USAGE.md
