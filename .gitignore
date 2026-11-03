@@ -31,3 +31,8 @@
 !/LICENSE
 !/LICENSING.md
 !/BRAND_USAGE.md
+
+# User-character favicon and Apple home-screen icon.
+!/assets/favicon.svg
+!/assets/favicon-32.png
+!/assets/apple-touch-icon.png
