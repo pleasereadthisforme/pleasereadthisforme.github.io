@@ -1,9 +1,53 @@
 import { templates } from './mascot-templates.js';
+
+// Share one bounded retry sequence per local asset (initial load + two retries).
+const characterAssets = new Map(), characterSources = new Map();
+async function loadCharacterAsset(src){
+ for(let attempt=0;attempt<3;attempt++){
+  if(attempt)await new Promise(resolve=>setTimeout(resolve,attempt===1?1000:3000));
+  const image=new Image();
+  image.src=attempt ? `${src}${src.includes('?')?'&':'?'}character_retry=${attempt}` : src;
+  try{
+   await image.decode();
+   characterSources.set(src,image.src);
+   return image;
+  }catch(error){if(attempt===2)throw error;}
+ }
+}
+function characterMarkup(kind){
+ return templates[kind].replace(/(<image[^>]*href=")([^"]+)(")/g,
+  (_,before,src,after)=>before+(characterSources.get(src)||src)+after);
+}
+
+function prepareCharacter(kind) {
+ const sources = [...new Set([...templates[kind].matchAll(/<image[^>]*href="([^"]+)"/g)].map(m=>m[1]))];
+ return Promise.all(sources.map(src=>{
+  if(!characterAssets.has(src)){
+   characterAssets.set(src, loadCharacterAsset(src));
+  }
+  return characterAssets.get(src);
+ }));
+}
+function revealCharacter(element,kind){
+ element.setAttribute('visibility','hidden');
+ prepareCharacter(kind).then(()=>{
+  element.querySelectorAll('image').forEach(image=>{
+   const src=image.getAttribute('href'),ready=characterSources.get(src);
+   if(ready && ready!==src)image.setAttribute('href',ready);
+  });
+  element.setAttribute('visibility','visible');
+ }).catch(()=>{});
+}
+
+for(const kind of Object.keys(templates))prepareCharacter(kind).catch(()=>{});
+let requestedBot = '', botRequest = 0;
+const readyBots = new Set();
 const $ = s => document.querySelector(s);
 const stage = $('.stage'), user = $('#user-art'), bot = $('#bot-art');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 user.innerHTML = templates.user;
 user.querySelector('svg').setAttribute('viewBox', '110 75 555 395');
+revealCharacter(user.querySelector('svg'),'user');
 let step = -1;
 let drawBot = () => {};
 const captions = ['Ready.', 'Reading files…', 'Writing…', 'Complete.'];
@@ -11,7 +55,17 @@ const questionText = 'What can “Please read this for me” do for my files?';
 const typed = $('#typed-question');
 const status = ['READY', 'READING', 'WRITING', 'DONE'];
 function installBot(kind) {
-  bot.innerHTML = templates[kind];
+ requestedBot = kind;
+ const request = ++botRequest;
+ if(!readyBots.has(kind)){
+  prepareCharacter(kind).then(()=>{
+   readyBots.add(kind);
+   if(request===botRequest && requestedBot===kind)installBot(kind);
+  }).catch(()=>{});
+  return;
+ }
+
+  bot.innerHTML = characterMarkup(kind);
   bot.querySelector('svg').setAttribute('viewBox', {thinking:'18 26 926 926',idle:'0 0 1000 1000',typing:'182 34 434 434',reading:'177 -24 1086 1086'}[kind]);
   const get = id => bot.querySelector(id);
   if (kind === 'idle') {
@@ -246,13 +300,19 @@ $('#motion-toggle').addEventListener('click',()=>{paused=!paused;$('#motion-togg
 // Approved poses replace the ambiguous newly drawn walking/pointing figures.
 // Static first frame only, without duplicated SVG clip identifiers.
 $('#hero-user').innerHTML='<svg viewBox="110 75 555 395" aria-hidden="true"><image href="assets/character-user-typing-sheet-v7.png" width="1536" height="1024"/></svg>';
-installBot('reading');drawBot(110);const reader=bot.firstElementChild.cloneNode(true);reader.querySelectorAll('[id]').forEach(e=>{e.id='source-'+e.id;});
+const readerHost=document.createElement('div');readerHost.innerHTML=templates.reading;
+const reader=readerHost.firstElementChild;reader.setAttribute('viewBox','177 -24 1086 1086');
+reader.querySelector('#page').setAttribute('d','M640 450 L840 478 L935 598 L735 570Z');
+reader.querySelector('#turning-arm').setAttribute('d','M977 365 Q935 570 949 590 L935 598');
+revealCharacter(reader,'reading');reader.querySelectorAll('[id]').forEach(e=>{e.id='source-'+e.id;});
 reader.querySelectorAll('*').forEach(e=>{for(const a of [...e.attributes]){let value=a.value.replaceAll('url(#','url(#source-');if((a.name==='href'||a.name==='xlink:href')&&value.startsWith('#'))value='#source-'+value.slice(1);if(value!==a.value)e.setAttribute(a.name,value);}});$('#source-reader').append(reader);
+revealCharacter($('#hero-user svg'),'user');
 render(0,true);layoutDemo();layoutEvidence();schedule();
 
 
 const footerMascot = document.querySelector('#footer-mascot');
 footerMascot.innerHTML = templates.idle.replaceAll('id="', 'id="footer-').replaceAll('url(#', 'url(#footer-');
+revealCharacter(footerMascot.querySelector('svg'),'idle');
 let footerVisible = false;
 const syncFooterMotion = () => footerMascot.classList.toggle('is-visible', footerVisible && !document.hidden);
 new IntersectionObserver(([entry]) => { footerVisible = entry.isIntersecting; syncFooterMotion(); }).observe(footerMascot);
